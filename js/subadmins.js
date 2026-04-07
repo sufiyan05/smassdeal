@@ -49,10 +49,10 @@
 
     function normalizeSubAdmin(subAdmin) {
         return {
-            id: subAdmin.id || "",
+            id: subAdmin.id || subAdmin.authUid || "",
             name: String(subAdmin.name || "").trim(),
             email: String(subAdmin.email || "").trim().toLowerCase(),
-            authUid: String(subAdmin.authUid || "").trim(),
+            authUid: String(subAdmin.authUid || subAdmin.id || "").trim(),
             role: "subadmin",
             phone: String(subAdmin.phone || "").trim(),
             status: String(subAdmin.status || "active").trim().toLowerCase(),
@@ -60,6 +60,21 @@
             createdAt: subAdmin.createdAt || null,
             updatedAt: subAdmin.updatedAt || null
         };
+    }
+
+    async function syncSubAdminUserRecord(subAdmin, options) {
+        if (!Smassdeal.users || typeof Smassdeal.users.upsertUser !== "function") {
+            return null;
+        }
+
+        if (!subAdmin || !subAdmin.authUid) {
+            return null;
+        }
+
+        return Smassdeal.users.upsertUser(subAdmin.authUid, subAdmin, {
+            role: "subadmin",
+            merge: !(options && options.merge === false)
+        });
     }
 
     function bindPasswordToggle(buttonId, inputId, iconId) {
@@ -124,6 +139,38 @@
         }
     }
 
+    async function deleteSubAdminLogin(email, password) {
+        const appName = `delete-subadmin-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const secondaryApp = window.firebase.initializeApp(Smassdeal.firebase.config, appName);
+        const secondaryAuth = window.firebase.getAuth(secondaryApp);
+
+        async function cleanup() {
+            try {
+                await window.firebase.signOut(secondaryAuth);
+            } catch (error) {
+                console.error("Error signing out delete auth session:", error);
+            }
+
+            if (window.firebase.deleteApp) {
+                try {
+                    await window.firebase.deleteApp(secondaryApp);
+                } catch (error) {
+                    console.error("Error deleting delete auth Firebase app:", error);
+                }
+            }
+        }
+
+        try {
+            const credential = await window.firebase.signInWithEmailAndPassword(secondaryAuth, email, password);
+            await window.firebase.deleteUser(credential.user);
+            await cleanup();
+            return true;
+        } catch (error) {
+            await cleanup();
+            throw error;
+        }
+    }
+
     async function getSubAdmins() {
         try {
             const db = Smassdeal.firebase.getDb();
@@ -132,12 +179,13 @@
                 return [];
             }
 
-            const subAdminsRef = window.firebase.collection(db, "subadmins");
-            const querySnapshot = await window.firebase.getDocs(subAdminsRef);
+            const usersRef = window.firebase.collection(db, "users");
+            const subAdminsQuery = window.firebase.query(usersRef, window.firebase.where("role", "==", "subadmin"));
+            const querySnapshot = await window.firebase.getDocs(subAdminsQuery);
 
             const subAdmins = [];
             querySnapshot.forEach((item) => {
-                subAdmins.push(normalizeSubAdmin({ ...item.data(), id: item.id }));
+                subAdmins.push(normalizeSubAdmin({ ...item.data(), id: item.id, authUid: item.id }));
             });
 
             return subAdmins.sort((left, right) => {
@@ -167,23 +215,20 @@
 
             const normalizedSubAdmin = normalizeSubAdmin(subAdmin);
             loginAccount = await createSubAdminLogin(normalizedSubAdmin.email, password);
-            const subAdminsRef = window.firebase.collection(db, "subadmins");
             const now = new Date();
-            const docRef = await window.firebase.addDoc(subAdminsRef, {
-                name: normalizedSubAdmin.name,
-                email: normalizedSubAdmin.email,
+
+            await syncSubAdminUserRecord({
+                ...normalizedSubAdmin,
                 authUid: loginAccount.uid,
-                role: normalizedSubAdmin.role,
-                phone: normalizedSubAdmin.phone,
-                status: normalizedSubAdmin.status,
-                notes: normalizedSubAdmin.notes,
                 createdAt: now,
                 updatedAt: now
+            }, {
+                merge: false
             });
 
             await loginAccount.cleanup();
 
-            return { ...normalizedSubAdmin, id: docRef.id, authUid: loginAccount.uid, createdAt: now, updatedAt: now };
+            return { ...normalizedSubAdmin, id: loginAccount.uid, authUid: loginAccount.uid, createdAt: now, updatedAt: now };
         } catch (error) {
             if (loginAccount) {
                 await loginAccount.cleanup({ deleteUser: true });
@@ -200,40 +245,58 @@
                 throw new Error("Firebase not initialized");
             }
 
-            const subAdminRef = window.firebase.doc(db, "subadmins", id);
-            const normalizedUpdates = normalizeSubAdmin({ ...updates, id });
+            const existingSubAdmin = await getSubAdminById(id);
+            if (!existingSubAdmin) {
+                throw new Error("Sub admin record not found.");
+            }
+
+            const normalizedUpdates = normalizeSubAdmin({ ...existingSubAdmin, ...updates, id });
+            const now = new Date();
 
             if (normalizedUpdates.authUid && normalizedUpdates.email !== String(updates.originalEmail || "").trim().toLowerCase()) {
                 throw new Error("Email cannot be changed for a sub admin login from this panel.");
             }
 
-            await window.firebase.updateDoc(subAdminRef, {
-                name: normalizedUpdates.name,
-                email: normalizedUpdates.email,
-                authUid: normalizedUpdates.authUid,
-                role: normalizedUpdates.role,
-                phone: normalizedUpdates.phone,
-                status: normalizedUpdates.status,
-                notes: normalizedUpdates.notes,
-                updatedAt: new Date()
+            await syncSubAdminUserRecord({
+                ...normalizedUpdates,
+                createdAt: existingSubAdmin.createdAt,
+                updatedAt: now
             });
 
-            return normalizedUpdates;
+            return {
+                ...normalizedUpdates,
+                createdAt: existingSubAdmin.createdAt,
+                updatedAt: now
+            };
         } catch (error) {
             console.error("Error updating sub admin:", error);
             throw error;
         }
     }
 
-    async function deleteSubAdmin(id) {
+    async function deleteSubAdmin(id, password) {
         try {
             const db = Smassdeal.firebase.getDb();
             if (!db) {
                 throw new Error("Firebase not initialized");
             }
 
-            const subAdminRef = window.firebase.doc(db, "subadmins", id);
-            await window.firebase.deleteDoc(subAdminRef);
+            const existingSubAdmin = await getSubAdminById(id);
+            if (!existingSubAdmin) {
+                throw new Error("Sub admin record not found.");
+            }
+
+            const deletePassword = String(password || "");
+            if (deletePassword.length < 6) {
+                throw new Error("Enter the sub admin password to delete the login account.");
+            }
+
+            await deleteSubAdminLogin(existingSubAdmin.email, deletePassword);
+
+            if (Smassdeal.users && typeof Smassdeal.users.removeUserByAuthUid === "function") {
+                await Smassdeal.users.removeUserByAuthUid(id);
+            }
+
             return true;
         } catch (error) {
             console.error("Error deleting sub admin:", error);
@@ -248,11 +311,12 @@
                 return null;
             }
 
-            const subAdminRef = window.firebase.doc(db, "subadmins", id);
-            const docSnap = await window.firebase.getDoc(subAdminRef);
+            const subAdmin = Smassdeal.users && typeof Smassdeal.users.getUserByAuthUid === "function"
+                ? await Smassdeal.users.getUserByAuthUid(id)
+                : null;
 
-            if (docSnap.exists()) {
-                return normalizeSubAdmin({ ...docSnap.data(), id: docSnap.id });
+            if (subAdmin && subAdmin.role === "subadmin") {
+                return normalizeSubAdmin({ ...subAdmin, id: subAdmin.id, authUid: subAdmin.id });
             }
 
             return null;
@@ -295,6 +359,7 @@
         const passwordHelp = document.getElementById("subAdminPasswordHelp");
         const emailHelp = document.getElementById("subAdminEmailHelp");
         const deleteLabel = document.getElementById("deleteItemLabel");
+        const deletePasswordInput = document.getElementById("deleteSubAdminPassword");
         const confirmDeleteButton = document.getElementById("confirmDeleteSubAdmin");
         const headerText = document.getElementById("subAdminsHeaderText");
         const deleteModalElement = document.getElementById("deleteConfirmModal");
@@ -306,6 +371,12 @@
 
         let filters = getStoredFilters();
         let pendingDeleteId = null;
+
+        function resetDeleteModal() {
+            if (deletePasswordInput) {
+                deletePasswordInput.value = "";
+            }
+        }
 
         bindPasswordToggle("toggleSubAdminPassword", "subAdminPassword", "toggleSubAdminPasswordIcon");
 
@@ -499,10 +570,18 @@
             const subAdmin = await getSubAdminById(subAdminId);
             pendingDeleteId = subAdminId;
             deleteLabel.textContent = subAdmin ? subAdmin.name : "this sub admin";
+            resetDeleteModal();
             if (deleteModal) {
                 deleteModal.show();
             }
         });
+
+        if (deleteModalElement) {
+            deleteModalElement.addEventListener("hidden.bs.modal", () => {
+                pendingDeleteId = null;
+                resetDeleteModal();
+            });
+        }
 
         confirmDeleteButton.addEventListener("click", async () => {
             if (!pendingDeleteId) {
@@ -510,7 +589,7 @@
             }
 
             try {
-                await deleteSubAdmin(pendingDeleteId);
+                await deleteSubAdmin(pendingDeleteId, deletePasswordInput ? deletePasswordInput.value : "");
                 pendingDeleteId = null;
                 if (deleteModal) {
                     deleteModal.hide();

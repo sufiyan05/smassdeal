@@ -50,69 +50,20 @@
         return currentUser;
     }
 
-    function normalizeSubAdminRecord(data) {
-        if (!data) {
-            return null;
-        }
-
-        return {
-            id: data.id || "",
-            email: String(data.email || "").trim().toLowerCase(),
-            authUid: String(data.authUid || "").trim(),
-            status: String(data.status || "active").trim().toLowerCase(),
-            role: "subadmin"
-        };
-    }
-
-    async function findSubAdminRecord(user) {
-        try {
-            const db = Smassdeal.firebase.getDb();
-            if (!db || !user) {
-                return null;
-            }
-
-            const subAdminsRef = window.firebase.collection(db, "subadmins");
-            if (user.uid) {
-                const byUid = await window.firebase.getDocs(
-                    window.firebase.query(subAdminsRef, window.firebase.where("authUid", "==", user.uid))
-                );
-
-                if (!byUid.empty) {
-                    const item = byUid.docs[0];
-                    return normalizeSubAdminRecord({ id: item.id, ...item.data() });
-                }
-            }
-
-            if (user.email) {
-                const byEmail = await window.firebase.getDocs(
-                    window.firebase.query(subAdminsRef, window.firebase.where("email", "==", String(user.email).trim().toLowerCase()))
-                );
-
-                if (!byEmail.empty) {
-                    const item = byEmail.docs[0];
-                    return normalizeSubAdminRecord({ id: item.id, ...item.data() });
-                }
-            }
-
-            return null;
-        } catch (error) {
-            console.error("Error resolving sub admin role:", error);
-            return null;
-        }
-    }
-
     async function resolveUserAccess(user) {
-        const subAdminRecord = await findSubAdminRecord(user);
+        const userRecord = Smassdeal.users && typeof Smassdeal.users.findUserRecord === "function"
+            ? await Smassdeal.users.findUserRecord(user)
+            : null;
 
-        if (subAdminRecord) {
+        if (userRecord) {
             return {
-                role: "subadmin",
-                subAdminRecord
+                role: userRecord.role === "admin" ? "admin" : "subadmin",
+                subAdminRecord: userRecord
             };
         }
 
         return {
-            role: "admin",
+            role: null,
             subAdminRecord: null
         };
     }
@@ -129,8 +80,9 @@
             name: user.displayName || formatName(email),
             email,
             role: access.role,
-            roleLabel: access.role === "subadmin" ? "Sub Admin" : "Admin",
+            roleLabel: access.role === "subadmin" ? "Sub Admin" : (access.role === "admin" ? "Admin" : ""),
             subAdminRecord: access.subAdminRecord,
+            status: access.subAdminRecord ? access.subAdminRecord.status : "active",
             loginAt: new Date().toISOString(),
             emailVerified: user.emailVerified
         };
@@ -195,6 +147,13 @@
             console.log("Sign in successful:", userCredential.user.email);
 
             const user = await buildCurrentUser(userCredential.user, email);
+            if (!user || !user.role) {
+                await window.firebase.signOut(auth);
+                return {
+                    ok: false,
+                    message: "Your account is not assigned access to this admin panel."
+                };
+            }
 
             currentUser = user;
             setFlash("Login successful. Welcome back.", "success");
@@ -420,8 +379,16 @@
         window.firebase.onAuthStateChanged(auth, async (user) => {
             console.log("Auth state changed:", user ? `User: ${user.email}` : "No user");
             if (user) {
-                currentUser = await buildCurrentUser(user);
-                console.log("Current user set:", currentUser);
+                const resolvedUser = await buildCurrentUser(user);
+                if (resolvedUser && resolvedUser.role) {
+                    currentUser = resolvedUser;
+                    console.log("Current user set:", currentUser);
+                } else {
+                    currentUser = null;
+                    console.warn("Authenticated user has no users collection role, signing out.");
+                    setFlash("Your account is not assigned access to this admin panel.", "warning");
+                    await window.firebase.signOut(auth);
+                }
             } else {
                 currentUser = null;
                 console.log("Current user cleared");
