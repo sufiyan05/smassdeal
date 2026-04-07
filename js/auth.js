@@ -326,7 +326,18 @@
 
     function requireAuth(allowedRoles) {
         if (!isAuthenticated()) {
-            setFlash("Please sign in to access the admin panel.", "warning");
+            const existingFlash = readJSON(FLASH_STORAGE_KEY, null);
+            const hasRecentFlash = Boolean(
+                existingFlash &&
+                existingFlash.message &&
+                existingFlash.createdAt &&
+                (Date.now() - Number(existingFlash.createdAt) < 10000)
+            );
+
+            if (!hasRecentFlash) {
+                setFlash("Please sign in to access the admin panel.", "warning");
+            }
+
             window.location.href = "index.html";
             return false;
         }
