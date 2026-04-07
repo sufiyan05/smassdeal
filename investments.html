@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Investments | SMASSDEAL Admin Panel</title>
+    <script>
+        (() => {
+            const storedTheme = localStorage.getItem('smassdeal-theme');
+            const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            const theme = storedTheme || systemTheme;
+            document.documentElement.setAttribute('data-theme', theme);
+            document.documentElement.setAttribute('data-bs-theme', theme);
+        })();
+    </script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="admin-page" data-page="investments" data-guard="auth">
+    <div class="container-fluid app-shell">
+        <div class="row">
+            <aside class="col-lg-3 col-xl-2 px-0 sidebar-shell d-none d-lg-block">
+                <div class="p-4 text-white sidebar-inner">
+                    <div class="brand-panel mb-4">
+                        <div class="d-inline-flex align-items-center justify-content-center">
+                            <img src="assets/logo.png" alt="SMASSDEAL Logo" class="brand-logo brand-logo-sm">
+                        </div>
+                    </div>
+
+                    <div class="sidebar-caption mb-3">Navigation</div>
+                    <nav class="d-grid gap-2">
+                        <a href="dashboard.html" class="sidebar-link" data-nav="dashboard">
+                            <i class="bi bi-grid-1x2-fill"></i>
+                            <span>Dashboard</span>
+                        </a>
+                        <a href="orders.html" class="sidebar-link" data-nav="orders">
+                            <i class="bi bi-bag-check-fill"></i>
+                            <span>Orders</span>
+                        </a>
+                        <a href="investments.html" class="sidebar-link" data-nav="investments">
+                            <i class="bi bi-cash-coin"></i>
+                            <span>Investments</span>
+                        </a>
+                        <a href="logs.html" class="sidebar-link" data-nav="logs">
+                            <i class="bi bi-clock-history"></i>
+                            <span>Logs</span>
+                        </a>
+                        <a href="subadmins.html" class="sidebar-link" data-nav="subadmins" data-role-visible="admin">
+                            <i class="bi bi-people-fill"></i>
+                            <span>Sub Admins</span>
+                        </a>
+                    </nav>
+
+                    <div class="sidebar-caption mt-5 mb-3">Account</div>
+                    <a href="profile.html" class="sidebar-link" data-nav="profile">
+                        <i class="bi bi-person-circle"></i>
+                        <span>Edit Profile</span>
+                    </a>
+                    <button type="button" class="sidebar-link border-0 w-100 text-start bg-transparent" data-bs-toggle="modal" data-bs-target="#logoutConfirmModal">
+                        <i class="bi bi-box-arrow-right"></i>
+                        <span>Logout</span>
+                    </button>
+                </div>
+            </aside>
+
+            <div class="col-lg-9 col-xl-10 px-0">
+                <header class="p-3 p-lg-4">
+                    <div class="app-navbar p-3 p-lg-4">
+                        <div class="d-flex flex-column flex-lg-row gap-3 justify-content-between align-items-lg-center">
+                            <div>
+                                <div class="d-flex align-items-center gap-2 mb-2 d-lg-none">
+                                    <button class="theme-toggle" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileSidebar" aria-controls="mobileSidebar">
+                                        <i class="bi bi-list"></i>
+                                    </button>
+                                    <span class="fw-bold">SMASSDEAL Admin Panel</span>
+                                </div>
+                                <div class="section-label mb-2">Overview</div>
+                                <h1 class="h3 mb-1 fw-bold">Investment Management</h1>
+                                <p class="text-secondary mb-0">Monitor material and product investment costs month by month.</p>
+                            </div>
+                            <div class="d-flex align-items-center justify-content-lg-end gap-3">
+                                <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle light and dark theme" title="Toggle theme">
+                                    <i class="bi bi-moon-stars-fill" id="themeToggleIcon"></i>
+                                </button>
+                                <div class="text-lg-end">
+                                    <div class="fw-semibold" data-user-name>SMASSDEAL Admin</div>
+                                    <div class="text-secondary small" data-user-email>admin@smassdeal.com</div>
+                                    <!-- <div class="text-secondary small">Frontend Demo</div> -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+
+                <main class="px-3 px-lg-4 pb-4 pb-lg-5">
+                    <div id="pageAlert"></div>
+
+                    <div class="panel-card p-4 mb-4">
+                        <div class="d-flex flex-column flex-xl-row justify-content-between align-items-xl-center gap-3 mb-4">
+                            <div>
+                                <h2 class="h4 fw-bold mb-1">Investments</h2>
+                                <p class="text-secondary mb-0" id="investmentsHeaderText">Track outgoing investment costs for the selected month.</p>
+                            </div>
+                            <button type="button" class="btn btn-dark rounded-4" id="openCreateInvestment">
+                                <i class="bi bi-plus-circle me-2"></i>New Investment
+                            </button>
+                        </div>
+
+                        <form id="investmentsFilterForm" class="row g-3 mb-4">
+                            <div class="col-md-5 col-xl-4">
+                                <label for="investmentsSearch" class="form-label">Search Product</label>
+                                <input type="text" id="investmentsSearch" class="form-control rounded-4" placeholder="Search by product name">
+                            </div>
+
+                            <div class="col-md-3 col-xl-3">
+                                <label for="investmentsMonth" class="form-label">Month</label>
+                                <input type="month" id="investmentsMonth" class="form-control rounded-4">
+                            </div>
+
+                            <div class="col-md-2 col-xl-2 d-grid">
+                                <label class="form-label d-none d-md-block">&nbsp;</label>
+                                <button type="submit" class="btn btn-primary rounded-4">Search</button>
+                            </div>
+
+                            <div class="col-md-2 col-xl-2 d-grid">
+                                <label class="form-label d-none d-md-block">&nbsp;</label>
+                                <button type="button" class="btn btn-outline-secondary rounded-4" id="resetInvestmentsFilters">Reset</button>
+                            </div>
+                        </form>
+
+                        <div class="table-responsive">
+                            <table class="table align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>Product Name</th>
+                                        <th>Investment Type</th>
+                                        <th>Current Date</th>
+                                        <th>Quantity</th>
+                                        <th>Price</th>
+                                        <th>Remark</th>
+                                        <th class="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="investmentsTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="panel-card p-4 form-shell hidden" id="investmentFormPanel">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <div>
+                                <h2 class="h4 fw-bold mb-0" id="investmentFormHeading">New Investment</h2>
+                                <p class="text-secondary mb-0" id="investmentFormSubheading">Record a new investment entry with category and pricing details.</p>
+                            </div>
+                            <button type="button" class="btn btn-outline-secondary rounded-4" id="closeInvestmentForm">Back to Investments</button>
+                        </div>
+
+                        <form id="investmentForm" class="row g-4">
+                            <input type="hidden" id="investmentId">
+
+                            <div class="col-md-6">
+                                <label for="investmentProductName" class="form-label">Product Name</label>
+                                <input type="text" id="investmentProductName" class="form-control rounded-4" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="investmentOrderType" class="form-label">Investment Type</label>
+                                <select id="investmentOrderType" class="form-select rounded-4" required></select>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="investmentCurrentDate" class="form-label">Current Date</label>
+                                <input type="date" id="investmentCurrentDate" class="form-control rounded-4" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="investmentPrice" class="form-label">Price</label>
+                                <input type="number" step="0.01" min="0" id="investmentPrice" class="form-control rounded-4" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="investmentQuantity" class="form-label">Quantity <span class="text-secondary">(Optional)</span></label>
+                                <input type="number" step="any" min="0" id="investmentQuantity" class="form-control rounded-4">
+                            </div>
+
+                            <div class="col-12">
+                                <label for="investmentRemark" class="form-label">Remark <span class="text-secondary">(Optional)</span></label>
+                                <textarea id="investmentRemark" class="form-control rounded-4" rows="3" placeholder="Add any note for this investment"></textarea>
+                            </div>
+
+                            <div class="col-12 d-flex justify-content-end gap-2">
+                                <button type="button" class="btn btn-outline-secondary rounded-4" id="cancelInvestmentForm">Cancel</button>
+                                <button type="submit" class="btn btn-dark rounded-4" id="investmentSubmitLabel">Create Investment</button>
+                            </div>
+                        </form>
+                    </div>
+                </main>
+            </div>
+        </div>
+    </div>
+
+    <div class="offcanvas offcanvas-start sidebar-shell text-white" tabindex="-1" id="mobileSidebar" aria-labelledby="mobileSidebarLabel">
+        <div class="offcanvas-header border-bottom border-secondary-subtle">
+            <h5 class="offcanvas-title" id="mobileSidebarLabel">SMASSDEAL Admin Panel</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body">
+            <nav class="d-grid gap-2">
+                <a href="dashboard.html" class="sidebar-link" data-nav="dashboard">
+                    <i class="bi bi-grid-1x2-fill"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="orders.html" class="sidebar-link" data-nav="orders">
+                    <i class="bi bi-bag-check-fill"></i>
+                    <span>Orders</span>
+                </a>
+                <a href="investments.html" class="sidebar-link" data-nav="investments">
+                    <i class="bi bi-cash-coin"></i>
+                    <span>Investments</span>
+                </a>
+                <a href="logs.html" class="sidebar-link" data-nav="logs">
+                    <i class="bi bi-clock-history"></i>
+                    <span>Logs</span>
+                </a>
+                <a href="subadmins.html" class="sidebar-link" data-nav="subadmins" data-role-visible="admin">
+                    <i class="bi bi-people-fill"></i>
+                    <span>Sub Admins</span>
+                </a>
+            </nav>
+
+            <a href="profile.html" class="sidebar-link mt-4" data-nav="profile">
+                <i class="bi bi-person-circle"></i>
+                <span>Edit Profile</span>
+            </a>
+            <button type="button" class="sidebar-link border-0 w-100 text-start bg-transparent mt-4" data-bs-toggle="modal" data-bs-target="#logoutConfirmModal">
+                <i class="bi bi-box-arrow-right"></i>
+                <span>Logout</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="modal fade" id="deleteConfirmModal" tabindex="-1" aria-labelledby="deleteConfirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteConfirmModalLabel">Confirm Delete</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">Are you sure you want to delete <span class="fw-bold" id="deleteItemLabel">this item</span>?</p>
+                    <p class="text-secondary mb-0">This action cannot be undone.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="confirmDeleteInvestment">Delete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="logoutConfirmModal" tabindex="-1" aria-labelledby="logoutConfirmModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="logoutConfirmModalLabel">Confirm Logout</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-2">Are you sure you want to logout from the admin panel?</p>
+                    <p class="text-secondary mb-0">You will need to sign in again to continue.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="logoutConfirmBtn">Logout</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+        import { getFirestore, collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, query, orderBy, where } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+        window.firebase = { initializeApp, getAuth, getFirestore, collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, query, orderBy, where, signInWithEmailAndPassword, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence };
+    </script>
+    <script src="js/firebase.js" defer></script>
+    <script src="js/auth.js" defer></script>
+    <script src="js/logs.js" defer></script>
+    <script src="js/orders.js" defer></script>
+    <script src="js/investments.js" defer></script>
+    <script src="js/subadmins.js" defer></script>
+    <script src="js/ui.js" defer></script>
+</body>
+</html>
