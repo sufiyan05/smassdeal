@@ -256,6 +256,11 @@
         const orderStatusSelect = document.getElementById("orderStatus");
         const headerText = document.getElementById("ordersHeaderText");
         const visibilityAlert = document.getElementById("ordersVisibilityAlert");
+        const monthlyTotalsTitle = document.getElementById("ordersMonthlyTotalsTitle");
+        const monthlyTotalsNote = document.getElementById("ordersMonthlyTotalsNote");
+        const monthlyTotalsGrid = document.getElementById("ordersMonthlyTotalsGrid");
+        const allTotalsNote = document.getElementById("ordersAllTotalsNote");
+        const allTotalsGrid = document.getElementById("ordersAllTotalsGrid");
         const deleteLabel = document.getElementById("deleteItemLabel");
         const confirmDeleteButton = document.getElementById("confirmDeleteOrder");
         const deleteModalElement = document.getElementById("deleteConfirmModal");
@@ -286,6 +291,10 @@
         `;
 
         let filters = getStoredFilters();
+        if (!filters.month) {
+            filters.month = await getLatestMonth();
+            setStoredFilters(filters);
+        }
         let pendingDeleteId = null;
         let pendingDeleteOrder = null;
         let renderedOrders = [];
@@ -354,8 +363,8 @@
             visibilitySelect.value = filters.visibility;
         }
 
-        async function getFilteredOrders() {
-            const orders = await getOrders();
+        async function getFilteredOrders(allOrders) {
+            const orders = Array.isArray(allOrders) ? allOrders : await getOrders();
             return orders
                 .filter((order) => !filters.month || String(order.currentDate).slice(0, 7) === filters.month)
                 .filter((order) => {
@@ -375,6 +384,67 @@
                     return !(isClosedMonth(filters.month) && order.orderStatus === "done");
                 })
                 .sort((left, right) => new Date(right.currentDate) - new Date(left.currentDate));
+        }
+
+        function summarizeOrders(orders) {
+            return {
+                count: orders.length,
+                price: orders.reduce((sum, order) => sum + Number(order.smassdealPrice || 0), 0),
+                paid: orders.reduce((sum, order) => sum + Number(order.userPaidPrice || 0), 0),
+                cost: orders.reduce((sum, order) => sum + Number(order.cost || 0), 0),
+                profit: orders.reduce((sum, order) => sum + Number(order.profit || 0), 0),
+                remaining: orders.reduce((sum, order) => sum + Number(order.remaining || 0), 0)
+            };
+        }
+
+        function buildSummaryItems(summary) {
+            return [
+                { label: "Orders", value: Number(summary.count || 0).toLocaleString("en-IN") },
+                { label: "Price", value: ui.formatCurrency(summary.price) },
+                { label: "Paid", value: ui.formatCurrency(summary.paid) },
+                { label: "Cost", value: ui.formatCurrency(summary.cost) },
+                { label: "Profit", value: ui.formatCurrency(summary.profit), tone: summary.profit < 0 ? "text-danger" : "text-success-strong" },
+                { label: "Remaining", value: ui.formatCurrency(summary.remaining), tone: summary.remaining > 0 ? "text-warning-strong" : "text-success-strong" }
+            ];
+        }
+
+        function renderSummaryGrid(host, summary) {
+            if (!host) {
+                return;
+            }
+
+            const items = buildSummaryItems(summary);
+            host.innerHTML = items.map((item) => `
+                <div class="col-6 col-md-4">
+                    <div class="border rounded-4 p-3 h-100">
+                        <div class="small text-secondary mb-1">${item.label}</div>
+                        <div class="fw-bold ${item.tone || ""}">${item.value}</div>
+                    </div>
+                </div>
+            `).join("");
+        }
+
+        async function renderTotals(allOrders) {
+            const orders = Array.isArray(allOrders) ? allOrders : await getOrders();
+            const monthLabel = ui.formatMonthLabel(filters.month);
+            const monthlyOrders = orders.filter((order) => !filters.month || String(order.currentDate).slice(0, 7) === filters.month);
+            const monthlySummary = summarizeOrders(monthlyOrders);
+            const allSummary = summarizeOrders(orders);
+
+            if (monthlyTotalsTitle) {
+                monthlyTotalsTitle.textContent = `${monthLabel} Summary`;
+            }
+
+            if (monthlyTotalsNote) {
+                monthlyTotalsNote.textContent = `Full totals for ${monthLabel}, including orders hidden from the current table view.`;
+            }
+
+            if (allTotalsNote) {
+                allTotalsNote.textContent = "Full totals across every order in the system.";
+            }
+
+            renderSummaryGrid(monthlyTotalsGrid, monthlySummary);
+            renderSummaryGrid(allTotalsGrid, allSummary);
         }
 
         function getOrderStatusBadge(status) {
@@ -456,7 +526,9 @@
 
         async function renderTable() {
             renderNotice();
-            const orders = await getFilteredOrders();
+            const allOrders = await getOrders();
+            await renderTotals(allOrders);
+            const orders = await getFilteredOrders(allOrders);
             renderedOrders = orders;
 
             if (!orders.length) {

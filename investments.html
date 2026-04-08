@@ -129,6 +129,40 @@
                             </div>
                         </form>
 
+                        <div class="row g-4 mb-4" id="investmentsTotalsHost">
+                            <div class="col-12 col-xl-6">
+                                <div class="panel-card metric-card p-4 h-100">
+                                    <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
+                                        <div>
+                                            <div class="section-label mb-2">Selected Month Totals</div>
+                                            <h3 class="h5 fw-bold mb-1" id="investmentsMonthlyTotalsTitle">Monthly Summary</h3>
+                                            <p class="text-secondary mb-0" id="investmentsMonthlyTotalsNote">Totals for the selected month.</p>
+                                        </div>
+                                        <span class="stat-icon">
+                                            <i class="bi bi-calendar3"></i>
+                                        </span>
+                                    </div>
+                                    <div class="row g-3" id="investmentsMonthlyTotalsGrid"></div>
+                                </div>
+                            </div>
+
+                            <div class="col-12 col-xl-6">
+                                <div class="panel-card metric-card p-4 h-100">
+                                    <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
+                                        <div>
+                                            <div class="section-label mb-2">All Time Totals</div>
+                                            <h3 class="h5 fw-bold mb-1">Overall Summary</h3>
+                                            <p class="text-secondary mb-0" id="investmentsAllTotalsNote">Totals across every investment record.</p>
+                                        </div>
+                                        <span class="stat-icon">
+                                            <i class="bi bi-wallet2"></i>
+                                        </span>
+                                    </div>
+                                    <div class="row g-3" id="investmentsAllTotalsGrid"></div>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="table-responsive">
                             <table class="table align-middle mb-0">
                                 <thead>

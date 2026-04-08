@@ -203,6 +203,11 @@
         const deleteModalElement = document.getElementById("deleteConfirmModal");
         const deleteModal = deleteModalElement ? new window.bootstrap.Modal(deleteModalElement) : null;
         const headerText = document.getElementById("investmentsHeaderText");
+        const monthlyTotalsTitle = document.getElementById("investmentsMonthlyTotalsTitle");
+        const monthlyTotalsNote = document.getElementById("investmentsMonthlyTotalsNote");
+        const monthlyTotalsGrid = document.getElementById("investmentsMonthlyTotalsGrid");
+        const allTotalsNote = document.getElementById("investmentsAllTotalsNote");
+        const allTotalsGrid = document.getElementById("investmentsAllTotalsGrid");
 
         if (!filterForm || !tableBody || !investmentForm) {
             return;
@@ -214,6 +219,10 @@
         `;
 
         let filters = getStoredFilters();
+        if (!filters.month) {
+            filters.month = await getLatestMonth();
+            setStoredFilters(filters);
+        }
         let pendingDeleteId = null;
         let pendingDeleteInvestment = null;
 
@@ -249,8 +258,8 @@
             monthInput.value = filters.month || await getLatestMonth();
         }
 
-        async function getFilteredInvestments() {
-            const investments = await getInvestments();
+        async function getFilteredInvestments(allInvestments) {
+            const investments = Array.isArray(allInvestments) ? allInvestments : await getInvestments();
             return investments
                 .filter((investment) => !filters.month || String(investment.currentDate).slice(0, 7) === filters.month)
                 .filter((investment) => {
@@ -263,6 +272,61 @@
                         .includes(filters.search.toLowerCase());
                 })
                 .sort((left, right) => new Date(right.currentDate) - new Date(left.currentDate));
+        }
+
+        function summarizeInvestments(investments) {
+            return {
+                count: investments.length,
+                quantity: investments.reduce((sum, investment) => sum + Number(investment.quantity || 0), 0),
+                amount: investments.reduce((sum, investment) => sum + Number(investment.price || 0), 0)
+            };
+        }
+
+        function buildSummaryItems(summary) {
+            return [
+                { label: "Entries", value: Number(summary.count || 0).toLocaleString("en-IN") },
+                { label: "Quantity", value: Number(summary.quantity || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 }) },
+                { label: "Amount", value: ui.formatCurrency(summary.amount) }
+            ];
+        }
+
+        function renderSummaryGrid(host, summary) {
+            if (!host) {
+                return;
+            }
+
+            const items = buildSummaryItems(summary);
+            host.innerHTML = items.map((item) => `
+                <div class="col-6 col-md-4">
+                    <div class="border rounded-4 p-3 h-100">
+                        <div class="small text-secondary mb-1">${item.label}</div>
+                        <div class="fw-bold">${item.value}</div>
+                    </div>
+                </div>
+            `).join("");
+        }
+
+        async function renderTotals(allInvestments) {
+            const investments = Array.isArray(allInvestments) ? allInvestments : await getInvestments();
+            const monthLabel = ui.formatMonthLabel(filters.month);
+            const monthlyInvestments = investments.filter((investment) => !filters.month || String(investment.currentDate).slice(0, 7) === filters.month);
+            const monthlySummary = summarizeInvestments(monthlyInvestments);
+            const allSummary = summarizeInvestments(investments);
+
+            if (monthlyTotalsTitle) {
+                monthlyTotalsTitle.textContent = `${monthLabel} Summary`;
+            }
+
+            if (monthlyTotalsNote) {
+                monthlyTotalsNote.textContent = `Full totals for ${monthLabel}, including records hidden by the current search.`;
+            }
+
+            if (allTotalsNote) {
+                allTotalsNote.textContent = "Full totals across every investment record.";
+            }
+
+            renderSummaryGrid(monthlyTotalsGrid, monthlySummary);
+            renderSummaryGrid(allTotalsGrid, allSummary);
         }
 
         function setFormMode(mode, investment) {
@@ -303,7 +367,9 @@
 
         async function renderTable() {
             headerText.textContent = `Track outgoing investment costs for ${ui.formatMonthLabel(filters.month)}.`;
-            const investments = await getFilteredInvestments();
+            const allInvestments = await getInvestments();
+            await renderTotals(allInvestments);
+            const investments = await getFilteredInvestments(allInvestments);
 
             if (!investments.length) {
                 tableBody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-secondary">No investments found.</td></tr>';

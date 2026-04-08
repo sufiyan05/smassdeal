@@ -270,6 +270,7 @@
 
             const totalOrders = orders.length;
             const totalRevenue = orders.reduce((sum, order) => sum + Number(order.userPaidPrice || 0), 0);
+            const totalCost = orders.reduce((sum, order) => sum + Number(order.cost || 0), 0);
             const totalInvestment = investments.reduce((sum, investment) => sum + Number(investment.price || 0), 0);
             const totalProfit = orders.reduce((sum, order) => sum + Number(order.profit || 0), 0);
 
@@ -287,21 +288,27 @@
                     note: `Received payments for ${monthLabel}`
                 },
                 {
-                    label: "Total Investment",
-                    value: formatCurrency(totalInvestment),
-                    icon: "bi-wallet2",
-                    note: `Investments for ${monthLabel}`
+                    label: "Total Cost",
+                    value: formatCurrency(totalCost),
+                    icon: "bi-receipt-cutoff",
+                    note: `Order costs for ${monthLabel}`
                 },
                 {
                     label: "Total Profit",
                     value: formatCurrency(totalProfit),
                     icon: "bi-graph-up-arrow",
                     note: `Paid amount minus order cost for ${monthLabel}`
-                }
+                },
+                {
+                    label: "Total Investment",
+                    value: formatCurrency(totalInvestment),
+                    icon: "bi-wallet2",
+                    note: `Investments for ${monthLabel}`
+                },
             ];
 
             statsHost.innerHTML = statCards.map((card) => `
-                <div class="col-md-6 col-xl-3">
+                <div class="col-md-6 col-xl">
                     <div class="panel-card metric-card p-4 h-100">
                         <div class="d-flex align-items-start justify-content-between gap-3">
                             <div>
